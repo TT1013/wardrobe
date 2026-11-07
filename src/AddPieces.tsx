@@ -84,7 +84,11 @@ function DraftCard({ d, onChange, onRemove }: { d: Draft; onChange: (id: string,
 
 interface Meta { sourceUrl?: string; brand?: string; price?: string; rawName?: boolean }
 
+// The store helper only exists when the app runs locally (npm run dev); a static deploy builds with VITE_HELPER=off.
+const HELPER = (import.meta as any).env?.VITE_HELPER !== 'off'
+
 function Importer() {
+  if (!HELPER) return null
   const [copied, setCopied] = useState(false)
   const linkRef = useRef<HTMLAnchorElement>(null)
   const code = makeBookmarklet(window.location.origin)
@@ -245,10 +249,10 @@ export function AddPieces({ defaultSlot, incoming, onAdd, onClose }: { defaultSl
           <span className="muted small">Select many at once for bulk add. Product shots on a plain background work best.</span>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = '' }} />
         </div>
-        <div className="row">
+        {HELPER && <div className="row">
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="…or paste a product page or image URL" onKeyDown={(e) => e.key === 'Enter' && fromUrl(url)} />
           <button onClick={() => fromUrl(url)} disabled={busy}>{busy ? '…' : 'Fetch'}</button>
-        </div>
+        </div>}
         <Importer />
         {msg && <p className="warn">{msg}</p>}
         {page && page.images.length > 1 && (
