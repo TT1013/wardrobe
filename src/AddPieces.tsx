@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { dominantColors, fileToImage, guessSlot, niceName, renderCandidate } from './image'
-import { Incoming, makeBookmarklet, proxyImage, proxyImageSrc, proxyPage } from './importer'
+import { HELPER, Incoming, makeBookmarklet, proxyImage, proxyImageSrc, proxyPage } from './importer'
 import { PALETTE, nearestPalette, paletteHex } from './palette'
 import { Piece, SLOTS, STATUSES, Slot, Status } from './types'
 
@@ -84,14 +84,10 @@ function DraftCard({ d, onChange, onRemove }: { d: Draft; onChange: (id: string,
 
 interface Meta { sourceUrl?: string; brand?: string; price?: string; rawName?: boolean }
 
-// The store helper only exists when the app runs locally (npm run dev); a static deploy builds with VITE_HELPER=off.
-const HELPER = (import.meta as any).env?.VITE_HELPER !== 'off'
-
 function Importer() {
-  if (!HELPER) return null
   const [copied, setCopied] = useState(false)
   const linkRef = useRef<HTMLAnchorElement>(null)
-  const code = makeBookmarklet(window.location.origin)
+  const code = makeBookmarklet((window.location.origin + window.location.pathname).replace(/\/$/, ''))
   // Set via the DOM: React blocks javascript: URLs in JSX.
   useEffect(() => { linkRef.current?.setAttribute('href', code) }, [code])
   return (
@@ -100,14 +96,14 @@ function Importer() {
       <ol className="small">
         <li>Drag this to your bookmarks bar: <a ref={linkRef} className="bm" onClick={(e) => e.preventDefault()} draggable>＋ TT13 Add</a>{' '}
           <button className="small-btn" onClick={() => { navigator.clipboard?.writeText(code).then(() => setCopied(true)).catch(() => {}) }}>{copied ? 'Copied' : 'Copy code'}</button></li>
-        <li>Open a product page and click it. The product opens here with its image, name, brand and price filled in.</li>
-        <li>Works while the app is running on this computer (<code>npm run dev</code>).</li>
+        <li>Open a product page and click it. The app opens with the product's name, brand, price and image filled in.</li>
+        <li>If your browser blocks the pop-up, allow pop-ups for that store once. A few stores won't let the image be copied; then right-click the image, choose Save Image, and drop it here.</li>
       </ol>
     </details>
   )
 }
 
-export function AddPieces({ defaultSlot, incoming, onAdd, onClose }: { defaultSlot: Slot | 'all'; incoming?: Incoming | null; onAdd: (pieces: Piece[]) => void; onClose: () => void }) {
+export function AddPieces({ defaultSlot, incoming, initialUrl, onAdd, onClose }: { defaultSlot: Slot | 'all'; incoming?: Incoming | null; initialUrl?: string; onAdd: (pieces: Piece[]) => void; onClose: () => void }) {
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [msg, setMsg] = useState('')
   const [url, setUrl] = useState('')
@@ -145,7 +141,8 @@ export function AddPieces({ defaultSlot, incoming, onAdd, onClose }: { defaultSl
     let lastErr = ''
     for (const u of order) {
       try {
-        const blob = await proxyImage(u, p.url)
+        const blob = p.blobs?.[u] ?? (HELPER ? await proxyImage(u, p.url) : null)
+        if (!blob) throw new Error("This store doesn't let its image be copied. Right-click the product image, choose Save Image, then drop the file here.")
         await addFiles([blob], [p.title || 'Web piece'], { sourceUrl: p.url, brand: p.brand, price: p.price, rawName: true })
         setBusy(false)
         return
@@ -158,11 +155,21 @@ export function AddPieces({ defaultSlot, incoming, onAdd, onClose }: { defaultSl
   }
 
   const started = useRef(false)
+  const thumbUrls = useRef(new Map<Blob, string>())
+  const thumb = (b: Blob) => {
+    let u = thumbUrls.current.get(b)
+    if (!u) { u = URL.createObjectURL(b); thumbUrls.current.set(b, u) }
+    return u
+  }
   useEffect(() => {
     if (incoming && !started.current) {
       started.current = true
       setPage(incoming)
       addFromPage(incoming)
+    } else if (initialUrl && !started.current) {
+      started.current = true
+      setUrl(initialUrl)
+      fromUrl(initialUrl)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -245,7 +252,7 @@ export function AddPieces({ defaultSlot, incoming, onAdd, onClose }: { defaultSl
           onDrop={onDrop}
           onClick={() => fileRef.current?.click()}
         >
-          <strong>Drop images, paste (⌘V), or tap to choose / take a photo</strong>
+          <strong>Drop images, paste an image or product link (⌘V), or tap to choose / take a photo</strong>
           <span className="muted small">Select many at once for bulk add. Product shots on a plain background work best.</span>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = '' }} />
         </div>
@@ -261,7 +268,7 @@ export function AddPieces({ defaultSlot, incoming, onAdd, onClose }: { defaultSl
             <div className="cands">
               {page.images.map((u) => (
                 <button key={u} className="cand checker" onClick={() => addFromPage(page, u)} disabled={busy}>
-                  <img src={proxyImageSrc(u, page.url)} alt="" loading="lazy" />
+                  <img src={page.blobs?.[u] ? thumb(page.blobs[u]) : HELPER ? proxyImageSrc(u, page.url) : u} alt="" loading="lazy" />
                 </button>
               ))}
             </div>

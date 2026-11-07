@@ -20,10 +20,10 @@ Home: Black. Away: Navy. Secondary: White, Light Blue, Beige. Neutral: Grey. No 
 
 ## M2: store import
 
-- One-click bookmarklet (drag it to the bookmarks bar from the Add dialog): on a product page it collects the product image(s), name, brand and price and opens them in the app
-- Or paste a product page URL or image URL into the Add dialog
-- A small local helper in the dev server (`server/proxy.ts`) fetches pages and images so retailer CORS rules don't block them. It only exists under `npm run dev` / `npm run preview`, refuses private addresses, and answers only requests to localhost
-- Manual palette override when auto color detection is fooled
+- **Bookmarklet (works on the hosted site, no account or server):** drag "＋ TT13 Add" from the Add dialog to the bookmarks bar. On a product page it collects the name, brand, price and product images, copies the images inside the store page, and sends them to the app in a pop-up tab.
+- Some stores' image hosts refuse the copy (Uniqlo does, Allbirds doesn't). The app then says so: right-click the product image, Save Image, drop it in.
+- **Local only (`npm run dev`):** also paste a product link or image link into the Add dialog, or paste one anywhere in the app. A small helper in the dev server (`server/`) fetches the page for the app. It refuses private addresses and answers only requests to localhost.
+- Manual palette override when auto color detection is fooled.
 
 ## Not yet (see spec milestones)
 
@@ -41,7 +41,7 @@ npm run build
 ## Known limits
 
 - Store photos worn by a model are not usable as-is: the person stays in the cutout and skews color detection. Pick a flat-lay or ghost-mannequin image from the candidate strip, or use the color override. Shoes, bags, watches and caps usually import cleanly.
-- Some sites (e.g. Patagonia) block automated page reads; use the bookmarklet there.
+- Pasting a link into the app needs the dev helper; the hosted site has no server, so use the bookmarklet there.
 
 - Background removal works on plain backgrounds. White garments on a white background may need a lower tolerance, or turn removal off.
 - Front view only. Side-view shoe photos are mirrored to make a pair unless marked "image shows a pair".

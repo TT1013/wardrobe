@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { AddPieces } from './AddPieces'
 import { AvatarPanel, Closet, DataPanel, Outfits, PieceEditor } from './Panels'
-import type { Incoming } from './importer'
+import { HELPER, type Incoming } from './importer'
 import { loadState, makeBackup, parseBackup, resetAll, save } from './storage'
 import { AvatarConfig, DEFAULT_AVATAR, Occasion, Outfit, Piece, SLOTS, Slot, Wearing } from './types'
 
@@ -25,6 +25,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [toast, setToast] = useState('')
+  const [pastedUrl, setPastedUrl] = useState<{ n: number; url: string } | null>(null)
   const [incoming, setIncoming] = useState<{ n: number; data: Incoming } | null>(null)
 
   // The bookmarklet opens this app as /#import=<product json>.
@@ -44,6 +45,44 @@ export default function App() {
     read()
     window.addEventListener('hashchange', read)
     return () => window.removeEventListener('hashchange', read)
+  }, [])
+
+  // The bookmarklet posts the product (with images it copied in the store page) from the store's tab.
+  useEffect(() => {
+    let lastId = ''
+    const onMessage = (e: MessageEvent) => {
+      const d = e.data
+      if (!d || d.tt13 !== 'import' || typeof d.id !== 'string' || !d.meta || !Array.isArray(d.images)) return
+      try { (e.source as WindowProxy | null)?.postMessage({ tt13: 'ack', id: d.id }, e.origin) } catch { /* ignore */ }
+      if (d.id === lastId) return // the bookmarklet re-sends until it hears the ack
+      lastId = d.id
+      const blobs: Record<string, Blob> = {}
+      for (const im of d.images) if (im?.blob instanceof Blob && typeof im.url === 'string') blobs[im.url] = im.blob
+      const m = d.meta
+      const images = Array.isArray(m.images) ? m.images.filter((u: unknown) => typeof u === 'string') : []
+      if (!images.length) return
+      setIncoming({ n: Date.now(), data: { title: String(m.title ?? ''), brand: String(m.brand ?? ''), price: String(m.price ?? ''), url: String(m.url ?? ''), images, blobs } })
+      setTab('closet')
+      setAdding(true)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  // Paste a product link anywhere outside a text field to start an import.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
+      const text = (e.clipboardData?.getData('text') ?? '').trim()
+      if (!HELPER || !/^https?:\/\/\S+$/.test(text)) return
+      e.preventDefault()
+      setPastedUrl({ n: Date.now(), url: text })
+      setTab('closet')
+      setAdding(true)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
   }, [])
 
   useEffect(() => {
@@ -181,7 +220,7 @@ export default function App() {
         </section>
       </main>
 
-      {adding && <AddPieces key={incoming?.n ?? 0} defaultSlot={slotFilter} incoming={incoming?.data} onClose={() => { setAdding(false); setIncoming(null) }} onAdd={(ps) => { setPieces((cur) => [...ps, ...cur]); setAdding(false); setIncoming(null); setToast(`Added ${ps.length} piece${ps.length > 1 ? 's' : ''}`) }} />}
+      {adding && <AddPieces key={incoming?.n ?? pastedUrl?.n ?? 0} defaultSlot={slotFilter} incoming={incoming?.data} initialUrl={pastedUrl?.url} onClose={() => { setAdding(false); setIncoming(null); setPastedUrl(null); setPastedUrl(null) }} onAdd={(ps) => { setPieces((cur) => [...ps, ...cur]); setAdding(false); setIncoming(null); setPastedUrl(null); setToast(`Added ${ps.length} piece${ps.length > 1 ? 's' : ''}`) }} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
