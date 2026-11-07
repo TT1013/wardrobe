@@ -30,6 +30,7 @@ export interface Piece {
   palette: string // nearest TT13 palette name
   offPalette: boolean
   sourceUrl: string
+  price?: string // recorded only; never scored or filtered (budget is out of scope)
   notes: string
   pair: boolean // shoe image already shows both shoes
   scale: number

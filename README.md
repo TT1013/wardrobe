@@ -18,9 +18,15 @@ Home: Black. Away: Navy. Secondary: White, Light Blue, Beige. Neutral: Grey. No 
 - Layering (top under outer), saved outfits by occasion (Work, Weekend, Travel, Going out)
 - Local-first: IndexedDB in the browser, JSON export/import for backup. Nothing is uploaded.
 
+## M2: store import
+
+- One-click bookmarklet (drag it to the bookmarks bar from the Add dialog): on a product page it collects the product image(s), name, brand and price and opens them in the app
+- Or paste a product page URL or image URL into the Add dialog
+- A small local helper in the dev server (`server/proxy.ts`) fetches pages and images so retailer CORS rules don't block them. It only exists under `npm run dev` / `npm run preview`, refuses private addresses, and answers only requests to localhost
+- Manual palette override when auto color detection is fooled
+
 ## Not yet (see spec milestones)
 
-- M2: bookmarklet import from retailer pages
 - M3: Uniform Spec editor, fit score, coverage matrix, "evaluate a candidate"
 - M4: polish and deploy
 
@@ -33,6 +39,9 @@ npm run build
 ```
 
 ## Known limits
+
+- Store photos worn by a model are not usable as-is: the person stays in the cutout and skews color detection. Pick a flat-lay or ghost-mannequin image from the candidate strip, or use the color override. Shoes, bags, watches and caps usually import cleanly.
+- Some sites (e.g. Patagonia) block automated page reads; use the bookmarklet there.
 
 - Background removal works on plain backgrounds. White garments on a white background may need a lower tolerance, or turn removal off.
 - Front view only. Side-view shoe photos are mirrored to make a pair unless marked "image shows a pair".

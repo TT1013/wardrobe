@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { AddPieces } from './AddPieces'
 import { AvatarPanel, Closet, DataPanel, Outfits, PieceEditor } from './Panels'
+import type { Incoming } from './importer'
 import { loadState, makeBackup, parseBackup, resetAll, save } from './storage'
 import { AvatarConfig, DEFAULT_AVATAR, Occasion, Outfit, Piece, SLOTS, Slot, Wearing } from './types'
 
@@ -24,6 +25,26 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [toast, setToast] = useState('')
+  const [incoming, setIncoming] = useState<{ n: number; data: Incoming } | null>(null)
+
+  // The bookmarklet opens this app as /#import=<product json>.
+  useEffect(() => {
+    const read = () => {
+      if (!location.hash.startsWith('#import=')) return
+      try {
+        const data = JSON.parse(decodeURIComponent(location.hash.slice(8))) as Incoming
+        history.replaceState(null, '', location.pathname + location.search)
+        if (Array.isArray(data.images)) {
+          setIncoming({ n: Date.now(), data })
+          setTab('closet')
+          setAdding(true)
+        }
+      } catch { /* ignore a malformed link */ }
+    }
+    read()
+    window.addEventListener('hashchange', read)
+    return () => window.removeEventListener('hashchange', read)
+  }, [])
 
   useEffect(() => {
     loadState().then((s) => {
@@ -160,7 +181,7 @@ export default function App() {
         </section>
       </main>
 
-      {adding && <AddPieces defaultSlot={slotFilter} onClose={() => setAdding(false)} onAdd={(ps) => { setPieces((cur) => [...ps, ...cur]); setAdding(false); setToast(`Added ${ps.length} piece${ps.length > 1 ? 's' : ''}`) }} />}
+      {adding && <AddPieces key={incoming?.n ?? 0} defaultSlot={slotFilter} incoming={incoming?.data} onClose={() => { setAdding(false); setIncoming(null) }} onAdd={(ps) => { setPieces((cur) => [...ps, ...cur]); setAdding(false); setIncoming(null); setToast(`Added ${ps.length} piece${ps.length > 1 ? 's' : ''}`) }} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
