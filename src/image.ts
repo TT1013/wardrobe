@@ -134,8 +134,10 @@ export function dominantColors(c: HTMLCanvasElement, k = 3): string[] {
 
 const GUESS: [RegExp, Slot][] = [
   [/\b(cap|hat|beanie|visor)\b/i, 'headwear'],
-  [/(jacket|coat|overshirt|parka|blazer|bomber|vest|cardigan|windbreaker|shacket)/i, 'outer'],
-  [/(t-?shirt|\btee\b|polo|sweater|sweatshirt|hoodie|henley|\btank\b|long sleeve|short sleeve|crew ?neck|knit)/i, 'top'],
+  [/(jacket|coat|overshirt|parka|blazer|bomber|windbreaker|shacket|trench|puffer)/i, 'outer'],
+  [/polo/i, 'top'],
+  [/(cardigan|sweater|pullover|\bvest\b|fleece|(quarter|half)[- ]?zip|sweatshirt|hoodie|jumper|\bknit)/i, 'mid'],
+  [/(t-?shirt|\btee\b|henley|\btank\b|button|oxford|long sleeve|short sleeve|crew ?neck|shirt)/i, 'top'],
   [/(pant|jean|chino|\bshorts?\b|trouser|jogger|denim|slack)/i, 'bottom'],
   [/(shoe|sneaker|boot|loafer|trainer|runner|sandal|oxford|derby)/i, 'shoes'],
   [/(watch)/i, 'watch'],

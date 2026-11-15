@@ -7,6 +7,7 @@ interface Region { x: number; y: number; w: number; h: number; align: string }
 export const REGIONS: Record<Slot, Region> = {
   headwear: { x: 128, y: 4, w: 144, h: 94, align: 'xMidYMax meet' },
   top: { x: 78, y: 200, w: 244, h: 300, align: 'xMidYMin meet' },
+  mid: { x: 72, y: 200, w: 256, h: 300, align: 'xMidYMin meet' },
   outer: { x: 60, y: 192, w: 280, h: 340, align: 'xMidYMin meet' },
   bottom: { x: 98, y: 440, w: 204, h: 362, align: 'xMidYMin meet' },
   shoes: { x: 96, y: 790, w: 208, h: 78, align: 'xMidYMid meet' },
@@ -21,11 +22,20 @@ function shade(hex: string, amt: number): string {
   return rgbToHex(f(r), f(g), f(b))
 }
 
+// Default stacking offsets so layers read as layers: a mid layer sits a little lower and tighter than the
+// shirt under it (collar and hem show), and an outer layer is a little roomier than the mid layer.
+const LAYER_ADJUST: Partial<Record<Slot, { s: number; dy: number }>> = {
+  mid: { s: 0.97, dy: 9 },
+  outer: { s: 1.05, dy: 5 },
+}
+const SHADOWED: Slot[] = ['mid', 'outer']
+
 function Garment({ piece, slot }: { piece: Piece; slot: Slot }) {
   const r = REGIONS[slot]
   const cx = r.x + r.w / 2
   const cy = r.y + r.h / 2
-  const t = `translate(${cx + piece.dx} ${cy + piece.dy}) scale(${piece.scale}) translate(${-cx} ${-cy})`
+  const adj = LAYER_ADJUST[slot] ?? { s: 1, dy: 0 }
+  const t = `translate(${cx + piece.dx} ${cy + piece.dy + adj.dy}) scale(${piece.scale * adj.s}) translate(${-cx} ${-cy})`
 
   if (slot === 'shoes') {
     if (piece.pair) {
@@ -64,10 +74,15 @@ export function Avatar({ config, wearing, pieces, className, showBase = true }: 
   const buildT = `translate(200 0) scale(${bx} 1) translate(-200 0)`
   const base = '#c9ccd1'
 
-  const order: Slot[] = ['bottom', 'shoes', 'belt', 'top', 'outer', 'bag', 'watch']
+  const order: Slot[] = ['bottom', 'shoes', 'belt', 'top', 'mid', 'outer', 'bag', 'watch']
 
   return (
     <svg viewBox="0 0 400 880" className={className} role="img" aria-label="TT13 avatar">
+      <defs>
+        <filter id="layer-shadow" x="-10%" y="-10%" width="120%" height="125%">
+          <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" floodColor="#000" floodOpacity="0.28" />
+        </filter>
+      </defs>
       {/* body */}
       <g transform={buildT}>
         <path d={`M156 480 L154 790`} stroke={skin} strokeWidth={62} strokeLinecap="round" fill="none" />
@@ -79,7 +94,7 @@ export function Avatar({ config, wearing, pieces, className, showBase = true }: 
         <path d="M276 238 Q304 340 308 450" stroke={skin} strokeWidth={38} strokeLinecap="round" fill="none" />
         <circle cx={91} cy={480} r={20} fill={skin} />
         <circle cx={309} cy={480} r={20} fill={skin} />
-        {showBase && !get('top') && !get('outer') && (
+        {showBase && !get('top') && !get('mid') && !get('outer') && (
           <path d="M118 212 Q200 196 282 212 L318 300 L286 322 L282 472 L118 472 L114 322 L82 300 Z" fill={base} stroke={base} strokeWidth={6} strokeLinejoin="round" opacity={0.85} />
         )}
         {showBase && !get('bottom') && (
@@ -114,7 +129,9 @@ export function Avatar({ config, wearing, pieces, className, showBase = true }: 
       <g transform={buildT}>
         {order.map((slot) => {
           const p = get(slot)
-          return p ? <Garment key={slot} piece={p} slot={slot} /> : null
+          if (!p) return null
+          // A soft shadow under the upper layers separates them from what is beneath; garment colors are untouched.
+          return SHADOWED.includes(slot) ? <g key={slot} filter="url(#layer-shadow)"><Garment piece={p} slot={slot} /></g> : <Garment key={slot} piece={p} slot={slot} />
         })}
       </g>
       {get('headwear') && <Garment piece={get('headwear')!} slot="headwear" />}

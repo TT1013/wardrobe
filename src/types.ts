@@ -1,9 +1,10 @@
-export type Slot = 'headwear' | 'top' | 'outer' | 'bottom' | 'shoes' | 'watch' | 'belt' | 'bag'
+export type Slot = 'headwear' | 'top' | 'mid' | 'outer' | 'bottom' | 'shoes' | 'watch' | 'belt' | 'bag'
 
 export const SLOTS: { key: Slot; label: string }[] = [
   { key: 'headwear', label: 'Headwear' },
-  { key: 'top', label: 'Top' },
-  { key: 'outer', label: 'Outer' },
+  { key: 'top', label: 'Shirt / tee' },
+  { key: 'mid', label: 'Sweater / cardigan' },
+  { key: 'outer', label: 'Jacket / coat' },
   { key: 'bottom', label: 'Bottom' },
   { key: 'shoes', label: 'Shoes' },
   { key: 'watch', label: 'Watch' },

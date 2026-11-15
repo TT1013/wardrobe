@@ -15,7 +15,7 @@ Home: Black. Away: Navy. Secondary: White, Light Blue, Beige. Neutral: Grey. No 
 - Add pieces by drop, paste, file picker / camera, or image URL; bulk add supported
 - Automatic background removal (flood fill from the border; garment pixels are never recolored) and dominant-color sampling with the nearest TT13 palette color
 - Per-piece fit controls (size, left/right, up/down) saved with the piece
-- Layering (top under outer), saved outfits by occasion (Work, Weekend, Travel, Going out)
+- Three stackable upper layers: shirt / tee (button-up, polo, tee), sweater / cardigan, jacket / coat. Upper layers sit slightly lower, tighter and with a soft shadow so collars and hems of the layers beneath show, saved outfits by occasion (Work, Weekend, Travel, Going out)
 - Local-first: IndexedDB in the browser, JSON export/import for backup. Nothing is uploaded.
 
 ## M2: store import
