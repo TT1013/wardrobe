@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { GarmentThumb } from './GarmentArt'
-import { brandFromUrl, classify, cleanTitle, textFromUrl } from './classify'
+import { brandFromUrl, classify, cleanTitle, nameFromUrl, textFromUrl } from './classify'
 import { fileToImage, niceName, sampleGarmentColor, toReference } from './image'
 import { HELPER, Incoming, makeBookmarklet, proxyImage, proxyPage } from './importer'
 import { LabelForm, LabelValue } from './LabelForm'
@@ -86,7 +86,7 @@ export function AddPieces({ defaultSlot, incoming, initialUrl, onAdd, onClose }:
       } else {
         const words = textFromUrl(u)
         push(makeDraft(
-          { title: titleCase(words) || 'New piece', brand: brandFromUrl(u), url: u }, undefined,
+          { title: nameFromUrl(u) || titleCase(words) || 'New piece', brand: brandFromUrl(u), url: u }, undefined,
           'Labeled from the link’s words only. For the exact color, photo and price, use the TT13 Add button on the store page.',
         ))
       }

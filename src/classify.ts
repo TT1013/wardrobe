@@ -164,6 +164,18 @@ export function textFromUrl(url: string): string {
   }
 }
 
+/** The product's own slug ("navy-cashmere-crewneck-sweater"), as a name. */
+export function nameFromUrl(url: string): string {
+  try {
+    const segs = new URL(url).pathname.split('/').filter((w) => w.includes('-') && !/\d/.test(w))
+    const best = segs.sort((a, b) => b.length - a.length)[0] ?? ''
+    return best.replace(/\.html?$/, '').replace(/-/g, ' ').replace(/\b(mens|men's|men|womens|unisex)\b/gi, '').replace(/\s+/g, ' ').trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  } catch {
+    return ''
+  }
+}
+
 export function brandFromUrl(url: string): string {
   try {
     const parts = new URL(url).hostname.replace(/^(www|shop|store|us|en)\./, '').split('.')
