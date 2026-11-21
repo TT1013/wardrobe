@@ -4,7 +4,7 @@
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
 const MAX_IMAGE = 15 * 1024 * 1024
-const MAX_HTML = 3 * 1024 * 1024
+const MAX_HTML = 10 * 1024 * 1024
 
 export interface ApiOptions {
   /** Origins allowed to call the API from a browser (exact match). null = local helper, checked via Host instead. */
@@ -59,7 +59,7 @@ function metaMap(html: string): Record<string, string> {
   return map
 }
 
-interface Extracted { title: string; brand: string; price: string; url: string; images: string[] }
+interface Extracted { title: string; brand: string; price: string; url: string; images: string[]; color: string; description: string; category: string }
 
 function extract(html: string, pageUrl: string): Extracted {
   const meta = metaMap(html)
@@ -76,6 +76,9 @@ function extract(html: string, pageUrl: string): Extracted {
   let title = meta['og:title'] || ''
   let brand = ''
   let price = meta['product:price:amount'] || meta['og:price:amount'] || ''
+  let color = meta['product:color'] || ''
+  let description = meta['og:description'] || meta['description'] || ''
+  let category = ''
 
   for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
@@ -89,6 +92,9 @@ function extract(html: string, pageUrl: string): Extracted {
         if (types.includes('Product')) {
           for (const i of ([] as any[]).concat(o.image ?? [])) add(typeof i === 'string' ? i : i?.url)
           if (o.name) title = String(o.name)
+          if (o.color) color = String(o.color)
+          if (o.description) description = String(o.description)
+          if (o.category) category = String(o.category?.name ?? o.category)
           if (o.brand) brand = typeof o.brand === 'string' ? o.brand : String(o.brand?.name ?? brand)
           const offer = ([] as any[]).concat(o.offers ?? [])[0]
           if (offer && (offer.price || offer.lowPrice)) price = String(offer.price ?? offer.lowPrice)
@@ -102,7 +108,7 @@ function extract(html: string, pageUrl: string): Extracted {
   add(meta['twitter:image:src'])
   if (!title) title = meta['twitter:title'] || (html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? '')
   if (!brand) brand = meta['og:site_name'] || ''
-  return { title: decode(title).trim(), brand: decode(brand).trim(), price, url: pageUrl, images: images.slice(0, 8) }
+  return { title: decode(title).trim(), brand: decode(brand).trim(), price, url: pageUrl, images: images.slice(0, 8), color: decode(color).slice(0, 80), description: decode(description).slice(0, 400), category: decode(category).slice(0, 200) }
 }
 
 /* ---------- Handlers ---------- */

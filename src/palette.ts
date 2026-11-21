@@ -64,3 +64,15 @@ export function nearestPalette(hex: string): { name: string; distance: number; o
 export function paletteHex(name: string): string {
   return PALETTE.find((p) => p.name === name)?.hex ?? '#999999'
 }
+
+/** Lighten (amt > 0) or darken (amt < 0) a hex color. */
+export function shade(hex: string, amt: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  const f = (v: number) => (amt < 0 ? v * (1 + amt) : v + (255 - v) * amt)
+  return rgbToHex(f(r), f(g), f(b))
+}
+
+export function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex)
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+}

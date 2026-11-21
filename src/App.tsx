@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { AddPieces } from './AddPieces'
 import { AvatarPanel, Closet, DataPanel, Outfits, PieceEditor } from './Panels'
-import { HELPER, type Incoming } from './importer'
+import type { Incoming } from './importer'
+import { withPalette } from './pieces'
 import { loadState, makeBackup, parseBackup, resetAll, save } from './storage'
 import { AvatarConfig, DEFAULT_AVATAR, Occasion, Outfit, Piece, SLOTS, Slot, Wearing } from './types'
 
@@ -61,7 +62,7 @@ export default function App() {
       const m = d.meta
       const images = Array.isArray(m.images) ? m.images.filter((u: unknown) => typeof u === 'string') : []
       if (!images.length) return
-      setIncoming({ n: Date.now(), data: { title: String(m.title ?? ''), brand: String(m.brand ?? ''), price: String(m.price ?? ''), url: String(m.url ?? ''), images, blobs } })
+      setIncoming({ n: Date.now(), data: { title: String(m.title ?? ''), brand: String(m.brand ?? ''), price: String(m.price ?? ''), url: String(m.url ?? ''), images, blobs, color: String(m.color ?? ''), description: String(m.description ?? ''), category: String(m.category ?? '') } })
       setTab('closet')
       setAdding(true)
     }
@@ -75,7 +76,7 @@ export default function App() {
       const el = e.target as HTMLElement | null
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
       const text = (e.clipboardData?.getData('text') ?? '').trim()
-      if (!HELPER || !/^https?:\/\/\S+$/.test(text)) return
+      if (!/^https?:\/\/\S+$/.test(text)) return
       e.preventDefault()
       setPastedUrl({ n: Date.now(), url: text })
       setTab('closet')
@@ -113,14 +114,17 @@ export default function App() {
     })
 
   const patchPiece = (id: string, patch: Partial<Piece>) => {
-    setPieces((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
-    // If the slot changed, move the worn reference so nothing renders in the wrong place.
-    if (patch.slot) {
+    const cur = pieces.find((p) => p.id === id)
+    if (!cur) return
+    const next = withPalette({ ...cur, ...patch })
+    setPieces((ps) => ps.map((p) => (p.id === id ? next : p)))
+    // If the type moved it to another slot, move what the avatar wears so nothing renders in the wrong place.
+    if (next.slot !== cur.slot) {
       setWearing((w) => {
-        const next: Wearing = {}
-        for (const [k, v] of Object.entries(w)) if (v !== id) next[k as Slot] = v
-        next[patch.slot!] = id
-        return next
+        const out: Wearing = {}
+        for (const [k, v] of Object.entries(w)) if (v !== id) out[k as Slot] = v
+        out[next.slot] = id
+        return out
       })
     }
   }
@@ -181,7 +185,7 @@ export default function App() {
       <main className="layout">
         <section className="stage-col">
           <div className="stage">
-            <Avatar config={avatar} wearing={wearing} pieces={pieces} />
+            <Avatar config={avatar} wearing={wearing} pieces={pieces} animate />
           </div>
           <div className="wear-bar">
             {SLOTS.map((s) => {

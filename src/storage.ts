@@ -1,4 +1,6 @@
 import { get, set, del } from 'idb-keyval'
+import { ensureSpec } from './classify'
+import { withPalette } from './pieces'
 import { AvatarConfig, DEFAULT_AVATAR, Outfit, Piece, Wearing } from './types'
 
 export interface AppState {
@@ -15,7 +17,7 @@ export async function loadState(): Promise<AppState> {
       get('pieces'), get('outfits'), get('avatar'), get('wearing'),
     ])
     return {
-      pieces: pieces ?? [],
+      pieces: ((pieces ?? []) as Piece[]).map((p) => withPalette(ensureSpec(p))),
       outfits: outfits ?? [],
       avatar: { ...DEFAULT_AVATAR, ...(avatar ?? {}) },
       wearing: wearing ?? {},
@@ -55,5 +57,6 @@ export function parseBackup(text: string): Backup {
   if (b?.app !== 'tt13-wardrobe' || !Array.isArray(b.pieces) || !Array.isArray(b.outfits)) {
     throw new Error('Not a TT13 wardrobe backup file')
   }
+  b.pieces = (b.pieces as Piece[]).map((p) => withPalette(ensureSpec(p)))
   return b as Backup
 }

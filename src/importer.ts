@@ -4,6 +4,9 @@ export interface Incoming {
   price: string
   url: string
   images: string[]
+  color?: string // the store's own color name for this product, when the page states it
+  description?: string
+  category?: string
   /** Images the bookmarklet already copied inside the store page, keyed by image URL. */
   blobs?: Record<string, Blob>
 }
@@ -62,14 +65,17 @@ var APP=${JSON.stringify(appUrl)};
 var abs=function(u){try{return new URL(u,location.href).href}catch(e){return null}};
 var c=[];var add=function(u){u=u&&abs(u);if(u&&/^https?:/.test(u)&&c.indexOf(u)<0)c.push(u)};
 var m=function(s){var e=document.querySelector(s);return e?e.getAttribute('content')||'':''};
-var title=m('meta[property="og:title"]')||document.title,brand=m('meta[property="og:site_name"]'),price=m('meta[property="product:price:amount"]')||m('meta[property="og:price:amount"]');
+var color=m('meta[property="product:color"]'),desc=m('meta[property="og:description"]')||m('meta[name="description"]'),cat='';var title=m('meta[property="og:title"]')||document.title,brand=m('meta[property="og:site_name"]'),price=m('meta[property="product:price:amount"]')||m('meta[property="og:price:amount"]');
 var ld=document.querySelectorAll('script[type="application/ld+json"]');
 for(var k=0;k<ld.length;k++){try{var q=[JSON.parse(ld[k].textContent)];while(q.length){var o=q.pop();if(!o||typeof o!=='object')continue;if(Array.isArray(o)){for(var z=0;z<o.length;z++)q.push(o[z]);continue}
 if(o['@graph'])q.push(o['@graph']);var t=[].concat(o['@type']||[]);
-if(t.indexOf('Product')>-1){[].concat(o.image||[]).forEach(function(i){add(typeof i==='string'?i:i&&i.url)});if(o.name)title=o.name;if(o.brand)brand=typeof o.brand==='string'?o.brand:(o.brand.name||brand);var of=[].concat(o.offers||[])[0];if(of&&(of.price||of.lowPrice))price=of.price||of.lowPrice}}}catch(e){}}
+if(t.indexOf('Product')>-1){[].concat(o.image||[]).forEach(function(i){add(typeof i==='string'?i:i&&i.url)});if(o.name)title=o.name;if(o.color)color=String(o.color);if(o.description)desc=String(o.description);if(o.category)cat=String(o.category.name||o.category);if(o.brand)brand=typeof o.brand==='string'?o.brand:(o.brand.name||brand);var of=[].concat(o.offers||[])[0];if(of&&(of.price||of.lowPrice))price=of.price||of.lowPrice}}}catch(e){}}
 add(m('meta[property="og:image"]'));add(m('meta[name="twitter:image"]'));
 [].slice.call(document.images).filter(function(i){return i.naturalWidth>300&&i.naturalHeight>300}).sort(function(a,b){return b.naturalWidth*b.naturalHeight-a.naturalWidth*a.naturalHeight}).slice(0,6).forEach(function(i){add(i.currentSrc||i.src)});
-var d={title:title,brand:brand,price:String(price||''),url:location.href,images:c.slice(0,8)};
+if(!color){var ct=(document.body.innerText||'').match(/\\bcolou?r\\s*:\\s*\\n?\\s*([^\\n]{2,40})/i);if(ct)color=ct[1]}
+if(!color){var sel=document.querySelector('[aria-checked="true"][aria-label],[aria-pressed="true"][aria-label],[aria-selected="true"][aria-label]');if(sel&&/[a-z]{3}/i.test(sel.getAttribute('aria-label')))color=sel.getAttribute('aria-label')}
+var bc=[].slice.call(document.querySelectorAll('nav[aria-label*="readcrumb"] a,[class*="readcrumb"] a')).map(function(a){return a.textContent.trim()}).join(' ');
+var d={title:title,brand:brand,price:String(price||''),url:location.href,images:c.slice(0,8),color:String(color||'').slice(0,80),description:String(desc||'').slice(0,400),category:(cat+' '+bc).trim().slice(0,200)};
 if(!d.images.length){alert('TT13: no product image found on this page.');return}
 var origin=new URL(APP).origin;
 var w=window.open(APP+'/#bm','tt13-wardrobe');

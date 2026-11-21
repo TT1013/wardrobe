@@ -1,3 +1,5 @@
+import type { GarmentSpec } from './garments'
+
 export type Slot = 'headwear' | 'top' | 'mid' | 'outer' | 'bottom' | 'shoes' | 'watch' | 'belt' | 'bag'
 
 export const SLOTS: { key: Slot; label: string }[] = [
@@ -24,19 +26,17 @@ export interface Piece {
   id: string
   name: string
   brand: string
-  slot: Slot
+  slot: Slot // always the slot of spec.kind
   status: Status
-  image: string // PNG data URL (cut-out)
-  colors: string[] // dominant hexes sampled from garment pixels
-  palette: string // nearest TT13 palette name
+  spec: GarmentSpec // what the avatar wears: type, colors, pattern, fit
+  image: string // reference photo (small JPEG data URL) or ''
+  photoUrl?: string // remote reference photo when the store would not let it be copied
+  colors: string[] // [spec.color, spec.accent]
+  palette: string // nearest TT13 palette name for spec.color
   offPalette: boolean
   sourceUrl: string
   price?: string // recorded only; never scored or filtered (budget is out of scope)
   notes: string
-  pair: boolean // shoe image already shows both shoes
-  scale: number
-  dx: number
-  dy: number
   createdAt: number
 }
 

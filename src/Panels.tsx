@@ -1,5 +1,8 @@
 import { useRef, useState } from 'react'
 import { Avatar } from './Avatar'
+import { GarmentThumb } from './GarmentArt'
+import { KIND_LABEL } from './garments'
+import { LabelForm } from './LabelForm'
 import { PALETTE, paletteHex } from './palette'
 import {
   AvatarConfig, Build, OCCASIONS, Occasion, Outfit, Piece, SLOTS, SLOT_LABEL, STATUSES, Slot, Status, Wearing,
@@ -54,16 +57,17 @@ export function Closet(props: {
         <div className="grid-cards">
           {shown.map((p) => (
             <div key={p.id} className={`card ${wearing[p.slot] === p.id ? 'worn' : ''}`}>
-              <button className="card-img checker" onClick={() => onWear(p)} aria-label={`Wear ${p.name}`}>
-                <img src={p.image} alt={p.name} />
+              <button className="card-img" onClick={() => onWear(p)} aria-label={`Wear ${p.name}`}>
+                <GarmentThumb p={p} className="card-art" />
+                {(p.image || p.photoUrl) && <img className="card-photo" src={p.image || p.photoUrl} alt="" referrerPolicy="no-referrer" />}
                 {p.status !== 'owned' && <span className="badge">{p.status}</span>}
               </button>
               <div className="card-meta">
                 <div className="card-name" title={p.name}>{p.name}</div>
                 <div className="card-sub">
-                  <span className="dot" style={{ background: p.colors[0] }} />
+                  <span className="dot" style={{ background: p.spec.color }} />
                   <span className={p.offPalette ? 'off' : ''}>{p.offPalette ? `~${p.palette}` : p.palette}</span>
-                  <span className="muted"> · {SLOT_LABEL[p.slot]}</span>
+                  <span className="muted"> · {p.brand || KIND_LABEL[p.spec.kind]}</span>
                 </div>
               </div>
               <button className="icon-btn edit" onClick={() => onEdit(p)} aria-label="Edit">✎</button>
@@ -75,50 +79,35 @@ export function Closet(props: {
   )
 }
 
-/* ---------- Piece editor (fit, details) ---------- */
+/* ---------- Piece editor (label, details) ---------- */
 
 export function PieceEditor({ piece, onChange, onDelete, onClose }: { piece: Piece; onChange: (patch: Partial<Piece>) => void; onDelete: () => void; onClose: () => void }) {
+  const [confirming, setConfirming] = useState(false)
   return (
     <div className="editor">
       <div className="modal-head">
         <h2>Edit piece</h2>
-        <button onClick={onClose}>Done</button>
+        <button className="primary" onClick={onClose}>Done</button>
       </div>
       <div className="editor-top">
-        <div className="card-img checker small-img"><img src={piece.image} alt="" /></div>
-        <div className="draft-form">
-          <input value={piece.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="Name" />
-          <input value={piece.brand} onChange={(e) => onChange({ brand: e.target.value })} placeholder="Brand" />
-          <div className="row">
-            <select value={piece.slot} onChange={(e) => onChange({ slot: e.target.value as Slot })}>
-              {SLOTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <select value={piece.status} onChange={(e) => onChange({ status: e.target.value as Status })}>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </div>
+        <div className="draft-preview">
+          <div className="draft-art"><GarmentThumb p={piece} /></div>
+          {(piece.image || piece.photoUrl) && <img className="ref-photo" src={piece.image || piece.photoUrl} alt="Store photo" referrerPolicy="no-referrer" />}
         </div>
+        <LabelForm idPrefix={`e-${piece.id}`} value={piece} onChange={(patch) => onChange(patch)} />
       </div>
-      <div className="muted small">
-        Detected {piece.palette}{piece.offPalette ? ' (off palette)' : ''}: {piece.colors.map((c) => <span key={c} className="dot" style={{ background: c, marginRight: 4 }} title={c} />)}
-      </div>
-      <h4>Fit on avatar</h4>
-      <label className="slider">Size {piece.scale.toFixed(2)}
-        <input type="range" min={0.5} max={1.6} step={0.01} value={piece.scale} onChange={(e) => onChange({ scale: +e.target.value })} />
-      </label>
-      <label className="slider">Left / right {piece.dx}
-        <input type="range" min={-90} max={90} value={piece.dx} onChange={(e) => onChange({ dx: +e.target.value })} />
-      </label>
-      <label className="slider">Up / down {piece.dy}
-        <input type="range" min={-90} max={90} value={piece.dy} onChange={(e) => onChange({ dy: +e.target.value })} />
-      </label>
-      <button onClick={() => onChange({ scale: 1, dx: 0, dy: 0 })}>Reset fit</button>
-      {piece.slot === 'shoes' && (
-        <label className="check"><input type="checkbox" checked={piece.pair} onChange={(e) => onChange({ pair: e.target.checked })} /> Image shows a pair</label>
+      <input id="edit-source" value={piece.sourceUrl} onChange={(e) => onChange({ sourceUrl: e.target.value })} placeholder="Product link" />
+      {piece.sourceUrl && /^https?:/.test(piece.sourceUrl) && <a className="small" href={piece.sourceUrl} target="_blank" rel="noreferrer">Open product page</a>}
+      <textarea id="edit-notes" value={piece.notes} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Notes" rows={2} />
+      {confirming ? (
+        <div className="row">
+          <span className="small">Delete "{piece.name}"? It also leaves any saved outfits.</span>
+          <button className="danger" onClick={onDelete}>Delete</button>
+          <button onClick={() => setConfirming(false)}>Keep</button>
+        </div>
+      ) : (
+        <button className="danger" onClick={() => setConfirming(true)}>Delete piece</button>
       )}
-      <input value={piece.sourceUrl} onChange={(e) => onChange({ sourceUrl: e.target.value })} placeholder="Source URL" />
-      <textarea value={piece.notes} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Notes" rows={2} />
-      <button className="danger" onClick={() => { if (confirm(`Delete "${piece.name}"? This also removes it from saved outfits.`)) onDelete() }}>Delete piece</button>
     </div>
   )
 }

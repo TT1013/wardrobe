@@ -1,88 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { dominantColors, fileToImage, guessSlot, niceName, renderCandidate } from './image'
-import { HELPER, Incoming, makeBookmarklet, proxyImage, proxyImageSrc, proxyPage } from './importer'
-import { PALETTE, nearestPalette, paletteHex } from './palette'
-import { Piece, SLOTS, STATUSES, Slot, Status } from './types'
+import { GarmentThumb } from './GarmentArt'
+import { brandFromUrl, classify, cleanTitle, textFromUrl } from './classify'
+import { fileToImage, niceName, sampleGarmentColor, toReference } from './image'
+import { HELPER, Incoming, makeBookmarklet, proxyImage, proxyPage } from './importer'
+import { LabelForm, LabelValue } from './LabelForm'
+import { uid, withPalette } from './pieces'
+import { Piece, Slot } from './types'
 
-interface Draft {
+interface Draft extends LabelValue {
   id: string
-  img: HTMLImageElement
-  name: string
-  brand: string
-  slot: Slot
-  status: Status
-  tol: number
-  remove: boolean
-  pair: boolean
-  sourceUrl: string
   price: string
-  override?: string // manual palette color when auto-detection is fooled (e.g. on-model photos)
-  image?: string
-  colors?: string[]
-  palette?: string
-  off?: boolean
+  sourceUrl: string
+  image: string
+  photoUrl: string
+  guessed: { kind: boolean; color: boolean }
+  note?: string
 }
 
-let counter = 0
-const uid = () => `${Date.now().toString(36)}${(counter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
-
-function DraftCard({ d, onChange, onRemove }: { d: Draft; onChange: (id: string, patch: Partial<Draft>) => void; onRemove: (id: string) => void }) {
-  useEffect(() => {
-    let cancel = false
-    const t = setTimeout(() => {
-      const c = renderCandidate(d.img, d.tol, d.remove)
-      if (cancel) return
-      const colors = dominantColors(c)
-      const np = nearestPalette(colors[0])
-      onChange(d.id, { image: c.toDataURL('image/png'), colors, palette: np.name, off: np.off })
-    }, 50)
-    return () => {
-      cancel = true
-      clearTimeout(t)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [d.img, d.tol, d.remove])
-
-  return (
-    <div className="draft">
-      <div className="draft-img checker">{d.image ? <img src={d.image} alt="" /> : <span className="muted">processing…</span>}</div>
-      <div className="draft-form">
-        <input value={d.name} onChange={(e) => onChange(d.id, { name: e.target.value })} placeholder="Name" />
-        <input value={d.brand} onChange={(e) => onChange(d.id, { brand: e.target.value })} placeholder="Brand (optional)" />
-        <div className="row">
-          <select value={d.slot} onChange={(e) => onChange(d.id, { slot: e.target.value as Slot })}>
-            {SLOTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <select value={d.status} onChange={(e) => onChange(d.id, { status: e.target.value as Status })}>
-            {STATUSES.map((s) => <option key={s}>{s}</option>)}
-          </select>
-        </div>
-        <label className="check"><input type="checkbox" checked={d.remove} onChange={(e) => onChange(d.id, { remove: e.target.checked })} /> Remove background</label>
-        {d.remove && (
-          <label className="slider">Tolerance {d.tol}
-            <input type="range" min={5} max={110} value={d.tol} onChange={(e) => onChange(d.id, { tol: +e.target.value })} />
-          </label>
-        )}
-        {d.slot === 'shoes' && (
-          <label className="check"><input type="checkbox" checked={d.pair} onChange={(e) => onChange(d.id, { pair: e.target.checked })} /> Image shows a pair</label>
-        )}
-        {d.colors && (
-          <div className="muted small row" style={{ alignItems: 'center' }}>
-            <span className="dot" style={{ background: d.override ? paletteHex(d.override) : d.colors[0] }} />
-            <span>Detected {d.palette}{d.off ? ' (off palette)' : ''}. Wrong? </span>
-            <select style={{ width: 'auto', padding: '2px 6px' }} value={d.override ?? ''} onChange={(e) => onChange(d.id, { override: e.target.value || undefined })}>
-              <option value="">Auto</option>
-              {PALETTE.map((p) => <option key={p.name}>{p.name}</option>)}
-            </select>
-          </div>
-        )}
-      </div>
-      <button className="icon-btn" onClick={() => onRemove(d.id)} aria-label="Discard">✕</button>
-    </div>
-  )
-}
-
-interface Meta { sourceUrl?: string; brand?: string; price?: string; rawName?: boolean }
+const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase())
 
 function Importer() {
   const [copied, setCopied] = useState(false)
@@ -92,12 +27,12 @@ function Importer() {
   useEffect(() => { linkRef.current?.setAttribute('href', code) }, [code])
   return (
     <details className="importer">
-      <summary>Import from any store page (one click)</summary>
+      <summary>One-click add from any store page</summary>
       <ol className="small">
         <li>Drag this to your bookmarks bar: <a ref={linkRef} className="bm" onClick={(e) => e.preventDefault()} draggable>＋ TT13 Add</a>{' '}
           <button className="small-btn" onClick={() => { navigator.clipboard?.writeText(code).then(() => setCopied(true)).catch(() => {}) }}>{copied ? 'Copied' : 'Copy code'}</button></li>
-        <li>Open a product page and click it. The app opens with the product's name, brand, price and image filled in.</li>
-        <li>If your browser blocks the pop-up, allow pop-ups for that store once. A few stores won't let the image be copied; then right-click the image, choose Save Image, and drop it here.</li>
+        <li>On a product page, click it. The piece opens here already labeled: brand, type, color, pattern and fit, read from the page.</li>
+        <li>If the browser blocks the pop-up, allow pop-ups for that store once.</li>
       </ol>
     </details>
   )
@@ -109,102 +44,52 @@ export function AddPieces({ defaultSlot, incoming, initialUrl, onAdd, onClose }:
   const [url, setUrl] = useState('')
   const [over, setOver] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [page, setPage] = useState<Incoming | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const addFiles = async (files: Blob[], names: string[] = [], meta: Meta = {}) => {
-    const imgs = files.filter((f) => f.type.startsWith('image/'))
-    if (!imgs.length) {
-      setMsg('No image found in that.')
-      return
+  const push = (d: Draft) => setDrafts((ds) => [...ds, d])
+
+  /** Label a product from its text, using the photo only to guess color when the text names none. */
+  const makeDraft = (t: { title: string; brand?: string; price?: string; url?: string; color?: string; description?: string; category?: string }, photo?: { img?: HTMLImageElement; url?: string }, note?: string): Draft => {
+    const c = classify({ ...t, slotHint: defaultSlot })
+    if (c.guessed.color && photo?.img) {
+      const hex = sampleGarmentColor(photo.img)
+      if (hex) c.spec.color = hex
     }
-    setMsg('')
-    for (let i = 0; i < imgs.length; i++) {
-      try {
-        const img = await fileToImage(imgs[i])
-        const raw = names[i] || (imgs[i] as File).name || 'New piece'
-        const nm = meta.rawName ? raw.trim() : niceName(raw)
-        const guess = guessSlot(nm)
-        const slot = guess === 'top' && defaultSlot !== 'all' ? defaultSlot : guess
-        setDrafts((ds) => [...ds, { id: uid(), img, name: nm, brand: meta.brand ?? '', price: meta.price ?? '', slot, status: 'owned', tol: 40, remove: true, pair: false, sourceUrl: meta.sourceUrl ?? '' }])
-      } catch (e) {
-        setMsg((e as Error).message)
-      }
+    let image = ''
+    try { if (photo?.img) image = toReference(photo.img) } catch { /* image without read permission */ }
+    return {
+      id: uid(), name: cleanTitle(t.title), brand: t.brand ?? '', price: t.price ?? '', sourceUrl: t.url ?? '', status: 'owned',
+      spec: c.spec, image, photoUrl: !image && photo?.url ? photo.url : '', guessed: c.guessed, note,
     }
   }
 
-  // Add one product image from a page, trying later candidates if the first can't be fetched.
-  const addFromPage = async (p: Incoming, imageUrl?: string) => {
-    setBusy(true)
-    setMsg('')
-    const order = imageUrl ? [imageUrl] : p.images
-    let lastErr = ''
-    for (const u of order) {
-      try {
-        const blob = p.blobs?.[u] ?? (HELPER ? await proxyImage(u, p.url) : null)
-        if (!blob) throw new Error("This store doesn't let its image be copied. Right-click the product image, choose Save Image, then drop the file here.")
-        await addFiles([blob], [p.title || 'Web piece'], { sourceUrl: p.url, brand: p.brand, price: p.price, rawName: true })
-        setBusy(false)
-        return
-      } catch (e) {
-        lastErr = (e as Error).message
-      }
-    }
-    setMsg(lastErr || 'Could not fetch an image from that page.')
-    setBusy(false)
+  /** A product from the bookmarklet or the local page reader. */
+  const fromProduct = async (p: Incoming) => {
+    let img: HTMLImageElement | undefined
+    const first = p.images[0]
+    try {
+      const blob = p.blobs?.[first] ?? (HELPER && first ? await proxyImage(first, p.url) : undefined)
+      if (blob) img = await fileToImage(blob)
+    } catch { /* the photo is only a reference */ }
+    push(makeDraft({ title: p.title, brand: p.brand, price: p.price, url: p.url, color: p.color, description: p.description, category: p.category }, { img, url: first }))
   }
 
-  const started = useRef(false)
-  const thumbUrls = useRef(new Map<Blob, string>())
-  const thumb = (b: Blob) => {
-    let u = thumbUrls.current.get(b)
-    if (!u) { u = URL.createObjectURL(b); thumbUrls.current.set(b, u) }
-    return u
-  }
-  useEffect(() => {
-    if (incoming && !started.current) {
-      started.current = true
-      setPage(incoming)
-      addFromPage(incoming)
-    } else if (initialUrl && !started.current) {
-      started.current = true
-      setUrl(initialUrl)
-      fromUrl(initialUrl)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    const onPaste = (e: ClipboardEvent) => {
-      const files = [...(e.clipboardData?.files ?? [])]
-      if (files.length) {
-        e.preventDefault()
-        addFiles(files, files.map(() => 'Pasted piece'))
-      }
-    }
-    window.addEventListener('paste', onPaste)
-    return () => window.removeEventListener('paste', onPaste)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Accepts either a direct image URL or a product page URL.
-  const fromUrl = async (raw: string) => {
+  /** A pasted link. With the local helper the page is read; on the hosted site only the link's own words are. */
+  const fromLink = async (raw: string) => {
     const u = raw.trim()
-    if (!u) return
+    if (!/^https?:\/\/\S+$/.test(u)) { setMsg('Paste a full product link starting with https://'); return }
     setBusy(true)
     setMsg('')
     try {
-      try {
-        const blob = await proxyImage(u)
-        await addFiles([blob], [new URL(u).pathname.split('/').pop() || 'Web piece'], { sourceUrl: u })
-        setUrl('')
-        return
-      } catch (e) {
-        if ((e as Error).message.startsWith('The importer helper')) throw e
+      if (HELPER) {
+        await fromProduct(await proxyPage(u))
+      } else {
+        const words = textFromUrl(u)
+        push(makeDraft(
+          { title: titleCase(words) || 'New piece', brand: brandFromUrl(u), url: u }, undefined,
+          'Labeled from the link’s words only. For the exact color, photo and price, use the TT13 Add button on the store page.',
+        ))
       }
-      const p = await proxyPage(u)
-      setPage(p)
-      await addFromPage(p)
       setUrl('')
     } catch (e) {
       setMsg((e as Error).message)
@@ -213,29 +98,61 @@ export function AddPieces({ defaultSlot, incoming, initialUrl, onAdd, onClose }:
     }
   }
 
+  const addPhotos = async (files: Blob[]) => {
+    const imgs = files.filter((f) => f.type.startsWith('image/'))
+    if (!imgs.length) { setMsg('No image found in that.'); return }
+    setMsg('')
+    for (const f of imgs) {
+      try {
+        const img = await fileToImage(f)
+        push(makeDraft({ title: niceName((f as File).name || 'New piece') }, { img }))
+      } catch (e) {
+        setMsg((e as Error).message)
+      }
+    }
+  }
+
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    if (incoming) fromProduct(incoming)
+    else if (initialUrl) fromLink(initialUrl)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const files = [...(e.clipboardData?.files ?? [])]
+      if (files.length) { e.preventDefault(); addPhotos(files); return }
+      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return
+      const text = (e.clipboardData?.getData('text') ?? '').trim()
+      if (/^https?:\/\/\S+$/.test(text)) { e.preventDefault(); fromLink(text) }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     setOver(false)
     const files = [...e.dataTransfer.files]
-    if (files.length) return addFiles(files)
+    if (files.length) return addPhotos(files)
     const u = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')
-    if (u.startsWith('http')) fromUrl(u)
+    if (u.startsWith('http')) fromLink(u)
   }
 
   const change = (id: string, patch: Partial<Draft>) => setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)))
-  const ready = drafts.length > 0 && drafts.every((d) => d.image)
 
   const commit = () => {
     const now = Date.now()
-    const pieces: Piece[] = drafts.map((d, i) => ({
-      id: uid(), name: d.name || 'Untitled', brand: d.brand, slot: d.slot, status: d.status,
-      image: d.image!,
-      colors: d.override ? [paletteHex(d.override), ...d.colors!] : d.colors!,
-      palette: d.override ?? d.palette!,
-      offPalette: d.override ? false : !!d.off,
-      sourceUrl: d.sourceUrl, price: d.price, notes: '', pair: d.pair, scale: 1, dx: 0, dy: 0, createdAt: now + i,
-    }))
-    onAdd(pieces)
+    onAdd(drafts.map((d, i) => withPalette({
+      id: uid(), name: d.name.trim() || 'Untitled', brand: d.brand, slot: 'top', status: d.status, spec: d.spec,
+      image: d.image, photoUrl: d.photoUrl || undefined, colors: [], palette: '', offPalette: false,
+      sourceUrl: d.sourceUrl, price: d.price, notes: '', createdAt: now + i,
+    })))
   }
 
   return (
@@ -245,40 +162,51 @@ export function AddPieces({ defaultSlot, incoming, initialUrl, onAdd, onClose }:
           <h2>Add pieces</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </div>
-        <div
-          className={`drop ${over ? 'over' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setOver(true) }}
-          onDragLeave={() => setOver(false)}
-          onDrop={onDrop}
-          onClick={() => fileRef.current?.click()}
-        >
-          <strong>Drop images, paste an image or product link (⌘V), or tap to choose / take a photo</strong>
-          <span className="muted small">Select many at once for bulk add. Product shots on a plain background work best.</span>
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = '' }} />
+
+        <div className="row">
+          <input id="add-link" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste a product link" onKeyDown={(e) => e.key === 'Enter' && fromLink(url)} />
+          <button className="primary" onClick={() => fromLink(url)} disabled={busy || !url.trim()}>{busy ? 'Reading…' : 'Add'}</button>
         </div>
-        {HELPER && <div className="row">
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="…or paste a product page or image URL" onKeyDown={(e) => e.key === 'Enter' && fromUrl(url)} />
-          <button onClick={() => fromUrl(url)} disabled={busy}>{busy ? '…' : 'Fetch'}</button>
-        </div>}
         <Importer />
-        {msg && <p className="warn">{msg}</p>}
-        {page && page.images.length > 1 && (
-          <div>
-            <div className="muted small">More images from {page.brand || 'this page'}: tap to add</div>
-            <div className="cands">
-              {page.images.map((u) => (
-                <button key={u} className="cand checker" onClick={() => addFromPage(page, u)} disabled={busy}>
-                  <img src={page.blobs?.[u] ? thumb(page.blobs[u]) : HELPER ? proxyImageSrc(u, page.url) : u} alt="" loading="lazy" />
-                </button>
-              ))}
-            </div>
+
+        <div className="add-ways">
+          <div
+            className={`drop ${over ? 'over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setOver(true) }}
+            onDragLeave={() => setOver(false)}
+            onDrop={onDrop}
+            onClick={() => fileRef.current?.click()}
+          >
+            <strong>Add from photos</strong>
+            <span className="muted small">Drop, paste or choose. Name the file well (e.g. "navy-oxford-shirt.jpg") and the label fills itself.</span>
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addPhotos([...(e.target.files ?? [])]); e.target.value = '' }} />
           </div>
-        )}
-        <div className="drafts">
-          {drafts.map((d) => <DraftCard key={d.id} d={d} onChange={change} onRemove={(id) => setDrafts((ds) => ds.filter((x) => x.id !== id))} />)}
+          <button className="blank-btn" onClick={() => push(makeDraft({ title: '' }))}>
+            <strong>+ Add without a photo</strong>
+            <span className="muted small">Pick the type and color yourself. Fastest for things you already own.</span>
+          </button>
         </div>
+        {msg && <p className="warn">{msg}</p>}
+
+        <div className="drafts">
+          {drafts.map((d) => (
+            <div key={d.id} className="draft">
+              <div className="draft-preview">
+                <div className="draft-art"><GarmentThumb p={d} /></div>
+                {(d.image || d.photoUrl) && <img className="ref-photo" src={d.image || d.photoUrl} alt="Store photo" referrerPolicy="no-referrer" />}
+              </div>
+              <div className="draft-body">
+                {(d.guessed.kind || d.guessed.color) && <p className="small muted">Auto-labeled. Check the fields marked <em className="check-me">check</em>.</p>}
+                {d.note && <p className="small muted">{d.note}</p>}
+                <LabelForm idPrefix={`d-${d.id}`} value={d} guessed={d.guessed} onChange={(patch) => change(d.id, { ...patch, guessed: { kind: d.guessed.kind && !patch.spec, color: d.guessed.color && !patch.spec } })} />
+              </div>
+              <button className="icon-btn" onClick={() => setDrafts((ds) => ds.filter((x) => x.id !== d.id))} aria-label="Discard">✕</button>
+            </div>
+          ))}
+        </div>
+
         <div className="modal-foot">
-          <button className="primary" disabled={!ready} onClick={commit}>Add {drafts.length || ''} to closet</button>
+          <button className="primary" disabled={!drafts.length} onClick={commit}>Add {drafts.length || ''} to closet</button>
         </div>
       </div>
     </div>

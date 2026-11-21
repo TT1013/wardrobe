@@ -1,61 +1,7 @@
+import type { ReactElement } from 'react'
+import { PatternDef, garmentParts } from './GarmentArt'
+import { shade } from './palette'
 import { AvatarConfig, Piece, Slot, Wearing } from './types'
-import { hexToRgb, rgbToHex } from './palette'
-
-interface Region { x: number; y: number; w: number; h: number; align: string }
-
-// Anchor regions on the 400x880 canvas. Garment images are fit into these, then nudged per piece.
-export const REGIONS: Record<Slot, Region> = {
-  headwear: { x: 128, y: 4, w: 144, h: 94, align: 'xMidYMax meet' },
-  top: { x: 78, y: 200, w: 244, h: 300, align: 'xMidYMin meet' },
-  mid: { x: 72, y: 200, w: 256, h: 300, align: 'xMidYMin meet' },
-  outer: { x: 60, y: 192, w: 280, h: 340, align: 'xMidYMin meet' },
-  bottom: { x: 98, y: 440, w: 204, h: 362, align: 'xMidYMin meet' },
-  shoes: { x: 96, y: 790, w: 208, h: 78, align: 'xMidYMid meet' },
-  watch: { x: 62, y: 454, w: 52, h: 52, align: 'xMidYMid meet' },
-  belt: { x: 112, y: 448, w: 176, h: 40, align: 'xMidYMid meet' },
-  bag: { x: 270, y: 470, w: 106, h: 124, align: 'xMidYMin meet' },
-}
-
-function shade(hex: string, amt: number): string {
-  const [r, g, b] = hexToRgb(hex)
-  const f = (v: number) => (amt < 0 ? v * (1 + amt) : v + (255 - v) * amt)
-  return rgbToHex(f(r), f(g), f(b))
-}
-
-// Default stacking offsets so layers read as layers: a mid layer sits a little lower and tighter than the
-// shirt under it (collar and hem show), and an outer layer is a little roomier than the mid layer.
-const LAYER_ADJUST: Partial<Record<Slot, { s: number; dy: number }>> = {
-  mid: { s: 0.97, dy: 9 },
-  outer: { s: 1.05, dy: 5 },
-}
-const SHADOWED: Slot[] = ['mid', 'outer']
-
-function Garment({ piece, slot }: { piece: Piece; slot: Slot }) {
-  const r = REGIONS[slot]
-  const cx = r.x + r.w / 2
-  const cy = r.y + r.h / 2
-  const adj = LAYER_ADJUST[slot] ?? { s: 1, dy: 0 }
-  const t = `translate(${cx + piece.dx} ${cy + piece.dy + adj.dy}) scale(${piece.scale * adj.s}) translate(${-cx} ${-cy})`
-
-  if (slot === 'shoes') {
-    if (piece.pair) {
-      return <image href={piece.image} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio={r.align} transform={t} />
-    }
-    const w = 100
-    const xl = 98
-    const xr = 202
-    const mid = xr + w / 2
-    return (
-      <g transform={t}>
-        <image href={piece.image} x={xl} y={r.y} width={w} height={r.h} preserveAspectRatio={r.align} />
-        <g transform={`translate(${mid} 0) scale(-1 1) translate(${-mid} 0)`}>
-          <image href={piece.image} x={xr} y={r.y} width={w} height={r.h} preserveAspectRatio={r.align} />
-        </g>
-      </g>
-    )
-  }
-  return <image href={piece.image} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio={r.align} transform={t} />
-}
 
 interface Props {
   config: AvatarConfig
@@ -63,78 +9,94 @@ interface Props {
   pieces: Piece[]
   className?: string
   showBase?: boolean
+  animate?: boolean
 }
 
-export function Avatar({ config, wearing, pieces, className, showBase = true }: Props) {
+export function Avatar({ config, wearing, pieces, className, showBase = true, animate = false }: Props) {
   const bx = config.build === 'slim' ? 0.93 : config.build === 'stocky' ? 1.1 : 1
   const skin = config.skin
   const skinD = shade(skin, -0.12)
   const hair = config.hair
-  const get = (s: Slot) => (wearing[s] ? pieces.find((p) => p.id === wearing[s]) : undefined)
+  const get = (s: Slot) => (wearing[s] ? pieces.find((p) => p.id === wearing[s] && p.spec) : undefined)
   const buildT = `translate(200 0) scale(${bx} 1) translate(-200 0)`
   const base = '#c9ccd1'
 
-  const order: Slot[] = ['bottom', 'shoes', 'belt', 'top', 'mid', 'outer', 'bag', 'watch']
+  const top = get('top'), mid = get('mid'), outer = get('outer')
+  const parts = (p?: Piece) => (p ? garmentParts(p) : undefined)
+  const topP = parts(top), midP = parts(mid), outerP = parts(outer)
+  const tucked = !!top?.spec.tucked
+  const shadow = (el: ReactElement | undefined, key: string) => el && <g key={key} filter="url(#layer-shadow)">{el}</g>
+
+  // Back to front. A tucked shirt goes under the trousers; a shirt collar lies over a sweater's neckline.
+  const stack: (ReactElement | undefined)[] = [
+    tucked ? topP?.body : undefined,
+    parts(get('shoes'))?.body,
+    parts(get('bottom'))?.body,
+    parts(get('belt'))?.body,
+    !tucked ? topP?.body : undefined,
+    midP ? shadow(midP.body, 'mid') : undefined,
+    topP?.collar,
+    outerP ? shadow(outerP.body, 'outer') : undefined,
+    parts(get('bag'))?.body,
+    parts(get('watch'))?.body,
+  ]
+  const worn = pieces.filter((p) => p.spec && Object.values(wearing).includes(p.id))
 
   return (
     <svg viewBox="0 0 400 880" className={className} role="img" aria-label="TT13 avatar">
       <defs>
         <filter id="layer-shadow" x="-10%" y="-10%" width="120%" height="125%">
-          <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" floodColor="#000" floodOpacity="0.28" />
+          <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" floodColor="#000" floodOpacity="0.25" />
         </filter>
+        {worn.map((p) => <PatternDef key={p.id} p={p} />)}
       </defs>
-      {/* body */}
-      <g transform={buildT}>
-        <path d={`M156 480 L154 790`} stroke={skin} strokeWidth={62} strokeLinecap="round" fill="none" />
-        <path d={`M244 480 L246 790`} stroke={skin} strokeWidth={62} strokeLinecap="round" fill="none" />
-        <ellipse cx={148} cy={818} rx={38} ry={17} fill={skin} />
-        <ellipse cx={252} cy={818} rx={38} ry={17} fill={skin} />
-        <path d="M122 212 Q200 196 278 212 L286 300 Q284 400 280 472 L120 472 Q116 400 114 300 Z" fill={skin} />
-        <path d="M124 238 Q96 340 92 450" stroke={skin} strokeWidth={38} strokeLinecap="round" fill="none" />
-        <path d="M276 238 Q304 340 308 450" stroke={skin} strokeWidth={38} strokeLinecap="round" fill="none" />
-        <circle cx={91} cy={480} r={20} fill={skin} />
-        <circle cx={309} cy={480} r={20} fill={skin} />
-        {showBase && !get('top') && !get('mid') && !get('outer') && (
-          <path d="M118 212 Q200 196 282 212 L318 300 L286 322 L282 472 L118 472 L114 322 L82 300 Z" fill={base} stroke={base} strokeWidth={6} strokeLinejoin="round" opacity={0.85} />
-        )}
-        {showBase && !get('bottom') && (
-          <path d="M116 464 L284 464 L290 610 L206 610 L200 548 L194 610 L110 610 Z" fill={base} stroke={base} strokeWidth={6} strokeLinejoin="round" opacity={0.85} />
-        )}
-      </g>
-
-      {/* head */}
-      <rect x={180} y={150} width={40} height={60} rx={14} fill={skinD} />
-      <ellipse cx={142} cy={112} rx={11} ry={15} fill={skinD} />
-      <ellipse cx={258} cy={112} rx={11} ry={15} fill={skinD} />
-      <ellipse cx={200} cy={106} rx={59} ry={68} fill={skin} />
-      <path d="M141 100 C136 44 170 26 200 26 C232 26 266 46 259 100 C252 76 236 66 200 68 C166 66 148 76 141 100 Z" fill={hair} />
-      <path d="M158 86 Q176 76 194 85" stroke={hair} strokeWidth={5} strokeLinecap="round" fill="none" />
-      <path d="M206 85 Q224 76 242 86" stroke={hair} strokeWidth={5} strokeLinecap="round" fill="none" />
-      <ellipse cx={177} cy={108} rx={6} ry={8} fill="#2b1a12" />
-      <ellipse cx={223} cy={108} rx={6} ry={8} fill="#2b1a12" />
-      <circle cx={179} cy={105} r={2.2} fill="#fff" />
-      <circle cx={225} cy={105} r={2.2} fill="#fff" />
-      <path d="M196 124 Q200 133 204 124" stroke={skinD} strokeWidth={3} strokeLinecap="round" fill="none" />
-      <path d="M168 140 Q200 176 232 140 Q200 150 168 140 Z" fill="#fff" stroke="#8a3a3a" strokeWidth={3} strokeLinejoin="round" />
-      {config.glasses && (
-        <g fill="rgba(255,255,255,0.08)" stroke="#111" strokeWidth={6} strokeLinejoin="round">
-          <rect x={150} y={91} width={46} height={34} rx={9} />
-          <rect x={204} y={91} width={46} height={34} rx={9} />
-          <path d="M196 102 L204 102" fill="none" />
-          <path d="M150 100 L141 98 M250 100 L259 98" fill="none" strokeLinecap="round" />
+      <g className={animate ? 'breathe' : undefined}>
+        {/* body */}
+        <g transform={buildT}>
+          <path d="M156 480 L154 790" stroke={skin} strokeWidth={62} strokeLinecap="round" fill="none" />
+          <path d="M244 480 L246 790" stroke={skin} strokeWidth={62} strokeLinecap="round" fill="none" />
+          <ellipse cx={148} cy={818} rx={38} ry={17} fill={skin} />
+          <ellipse cx={252} cy={818} rx={38} ry={17} fill={skin} />
+          <path d="M122 212 Q200 196 278 212 L286 300 Q284 400 280 472 L120 472 Q116 400 114 300 Z" fill={skin} />
+          <path d="M124 238 Q96 340 92 450" stroke={skin} strokeWidth={38} strokeLinecap="round" fill="none" />
+          <path d="M276 238 Q304 340 308 450" stroke={skin} strokeWidth={38} strokeLinecap="round" fill="none" />
+          <circle cx={91} cy={480} r={20} fill={skin} />
+          <circle cx={309} cy={480} r={20} fill={skin} />
+          {showBase && !top && !mid && !outer && (
+            <path d="M118 212 Q200 196 282 212 L318 300 L286 322 L282 472 L118 472 L114 322 L82 300 Z" fill={base} stroke={base} strokeWidth={6} strokeLinejoin="round" opacity={0.85} />
+          )}
+          {showBase && !get('bottom') && (
+            <path d="M116 464 L284 464 L290 610 L206 610 L200 548 L194 610 L110 610 Z" fill={base} stroke={base} strokeWidth={6} strokeLinejoin="round" opacity={0.85} />
+          )}
         </g>
-      )}
 
-      {/* garments */}
-      <g transform={buildT}>
-        {order.map((slot) => {
-          const p = get(slot)
-          if (!p) return null
-          // A soft shadow under the upper layers separates them from what is beneath; garment colors are untouched.
-          return SHADOWED.includes(slot) ? <g key={slot} filter="url(#layer-shadow)"><Garment piece={p} slot={slot} /></g> : <Garment key={slot} piece={p} slot={slot} />
-        })}
+        {/* head */}
+        <rect x={180} y={150} width={40} height={60} rx={14} fill={skinD} />
+        <ellipse cx={142} cy={112} rx={11} ry={15} fill={skinD} />
+        <ellipse cx={258} cy={112} rx={11} ry={15} fill={skinD} />
+        <ellipse cx={200} cy={106} rx={59} ry={68} fill={skin} />
+        <path d="M141 100 C136 44 170 26 200 26 C232 26 266 46 259 100 C252 76 236 66 200 68 C166 66 148 76 141 100 Z" fill={hair} />
+        <path d="M158 86 Q176 76 194 85" stroke={hair} strokeWidth={5} strokeLinecap="round" fill="none" />
+        <path d="M206 85 Q224 76 242 86" stroke={hair} strokeWidth={5} strokeLinecap="round" fill="none" />
+        <ellipse cx={177} cy={108} rx={6} ry={8} fill="#2b1a12" />
+        <ellipse cx={223} cy={108} rx={6} ry={8} fill="#2b1a12" />
+        <circle cx={179} cy={105} r={2.2} fill="#fff" />
+        <circle cx={225} cy={105} r={2.2} fill="#fff" />
+        <path d="M196 124 Q200 133 204 124" stroke={skinD} strokeWidth={3} strokeLinecap="round" fill="none" />
+        <path d="M168 140 Q200 176 232 140 Q200 150 168 140 Z" fill="#fff" stroke="#8a3a3a" strokeWidth={3} strokeLinejoin="round" />
+        {config.glasses && (
+          <g fill="rgba(255,255,255,0.08)" stroke="#111" strokeWidth={6} strokeLinejoin="round">
+            <rect x={150} y={91} width={46} height={34} rx={9} />
+            <rect x={204} y={91} width={46} height={34} rx={9} />
+            <path d="M196 102 L204 102" fill="none" />
+            <path d="M150 100 L141 98 M250 100 L259 98" fill="none" strokeLinecap="round" />
+          </g>
+        )}
+
+        {/* clothes */}
+        <g transform={buildT}>{stack.map((el, i) => el && <g key={i}>{el}</g>)}</g>
+        {parts(get('headwear'))?.body}
       </g>
-      {get('headwear') && <Garment piece={get('headwear')!} slot="headwear" />}
     </svg>
   )
 }

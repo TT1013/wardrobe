@@ -1,5 +1,7 @@
 # TT13 Uniform (wardrobe)
 
+**How pieces work (since 2026-11-21):** every piece is a label (type, colors, pattern, fit) and the avatar wears an illustrated version drawn from it. Store photos are kept only as a reference thumbnail. Labels fill themselves from the product page and can be corrected in one tap.
+
 A capsule-wardrobe visualizer. Dress a character that looks like you, using real product images, and see how a piece fits the rest of the uniform.
 
 Spec: `Projects/tt13-uniform/SPEC.md` in the TT13 vault.
