@@ -19,9 +19,13 @@ const outfits: Piece[][] = [
   [piece('oxford', '#f4f4f1', { tucked: true }), piece('blazer', '#1b2a49'), piece('trousers', '#8a8d92'), piece('derbies', '#141416', { accent: '#3a2a20' }), piece('belt', '#6b4a35', { accent: '#c9ccd0' }), piece('watch', '#141416', { accent: '#c9ccd0' })],
   [piece('hoodie', '#8a8d92', { pattern: 'heather' }), piece('bomber', '#141416'), piece('joggers', '#1b2a49'), piece('runners', '#141416', { accent: '#f2f2ef' }), piece('cap', '#1b2a49')],
   [piece('longsleeve-tee', '#ece6d6'), piece('quarter-zip', '#1b2a49'), piece('overcoat', '#b88a5a'), piece('jeans', '#a9c7e8', { pattern: 'denim', accent: '#c9a15a' }), piece('sneakers', '#141416', { accent: '#f2f2ef' }), piece('crossbody', '#141416')],
+  [piece('oxford', '#1b2a49')],
+  [],
+  [piece('tee', '#141416'), piece('shorts', '#d8c7a8'), piece('sneakers', '#f4f4f1', { accent: '#f2f2ef' }), piece('watch', '#c9ccd0', { accent: '#c9ccd0' })],
 ]
 
-const pick = process.argv[3] === 'b' ? outfits.slice(3) : outfits.slice(0, 3)
+const which = process.argv[3] ?? 'a'
+const pick = which === 'b' ? outfits.slice(3, 6) : which === 'c' ? outfits.slice(6, 9) : outfits.slice(0, 3)
 const cells = pick.map((ps, i) => {
   const wearing: Wearing = {}
   for (const p of ps) wearing[p.slot as Slot] = p.id
