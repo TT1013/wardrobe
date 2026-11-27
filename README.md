@@ -32,6 +32,12 @@ Home: Black. Away: Navy. Secondary: White, Light Blue, Beige. Neutral: Grey. No 
 - M3: Uniform Spec editor, fit score, coverage matrix, "evaluate a candidate"
 - M4: polish and deploy
 
+## Drawing system
+
+- `src/rig.ts`: the body rig (A-pose arm and leg curves, torso contour). Every garment is built on it, so layers line up.
+- `src/GarmentArt.tsx`: each garment type. Layer depth keeps every layer wrapping the one beneath it (shirt 2, sweater 6, jacket 11). Each garment's pieces merge into one outlined silhouette, and one light direction shades all layers.
+- `scripts/preview.tsx`: renders test outfits to an SVG for visual review (`npx esbuild scripts/preview.tsx --bundle --platform=node --format=cjs --jsx=automatic --outfile=/tmp/p.cjs && node /tmp/p.cjs out.svg`).
+
 ## Run
 
 ```bash

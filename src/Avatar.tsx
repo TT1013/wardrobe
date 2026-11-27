@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
-import { PatternDef, garmentParts } from './GarmentArt'
+import { PatternDef, SharedDefs, garmentParts } from './GarmentArt'
+import { bodyShapes, handPoint, mx } from './rig'
 import { shade } from './palette'
 import { AvatarConfig, Piece, Slot, Wearing } from './types'
 
@@ -42,32 +43,28 @@ export function Avatar({ config, wearing, pieces, className, showBase = true, an
   ]
   const worn = pieces.filter((p) => p.spec && Object.values(wearing).includes(p.id))
 
+  const body = bodyShapes()
+  const hand = handPoint()
+  const skinLine = shade(skin, -0.2)
+  const baseTop = !top && !mid && !outer && showBase ? garmentParts({ id: 'base-top', spec: { kind: 'tee', color: base, accent: base, pattern: 'solid', fit: 'regular', tucked: false } }).body : undefined
+  const baseBottom = !get('bottom') && showBase ? garmentParts({ id: 'base-bottom', spec: { kind: 'shorts', color: base, accent: base, pattern: 'solid', fit: 'regular', tucked: false } }).body : undefined
+
   return (
     <svg viewBox="0 0 400 880" className={className} role="img" aria-label="TT13 avatar">
       <defs>
-        <filter id="layer-shadow" x="-10%" y="-10%" width="120%" height="125%">
-          <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" floodColor="#000" floodOpacity="0.25" />
-        </filter>
+        <SharedDefs />
         {worn.map((p) => <PatternDef key={p.id} p={p} />)}
       </defs>
       <g className={animate ? 'breathe' : undefined}>
-        {/* body */}
+        {/* body: drawn in two passes so arms, torso and legs read as one figure */}
         <g transform={buildT}>
-          <path d="M156 480 L154 790" stroke={skin} strokeWidth={62} strokeLinecap="round" fill="none" />
-          <path d="M244 480 L246 790" stroke={skin} strokeWidth={62} strokeLinecap="round" fill="none" />
-          <ellipse cx={148} cy={818} rx={38} ry={17} fill={skin} />
-          <ellipse cx={252} cy={818} rx={38} ry={17} fill={skin} />
-          <path d="M122 212 Q200 196 278 212 L286 300 Q284 400 280 472 L120 472 Q116 400 114 300 Z" fill={skin} />
-          <path d="M124 238 Q96 340 92 450" stroke={skin} strokeWidth={38} strokeLinecap="round" fill="none" />
-          <path d="M276 238 Q304 340 308 450" stroke={skin} strokeWidth={38} strokeLinecap="round" fill="none" />
-          <circle cx={91} cy={480} r={20} fill={skin} />
-          <circle cx={309} cy={480} r={20} fill={skin} />
-          {showBase && !top && !mid && !outer && (
-            <path d="M118 212 Q200 196 282 212 L318 300 L286 322 L282 472 L118 472 L114 322 L82 300 Z" fill={base} stroke={base} strokeWidth={6} strokeLinejoin="round" opacity={0.85} />
-          )}
-          {showBase && !get('bottom') && (
-            <path d="M116 464 L284 464 L290 610 L206 610 L200 548 L194 610 L110 610 Z" fill={base} stroke={base} strokeWidth={6} strokeLinejoin="round" opacity={0.85} />
-          )}
+          {[...body.limbs, body.torso].map((d, i) => <path key={`o${i}`} d={d} fill={skinLine} stroke={skinLine} strokeWidth={3} strokeLinejoin="round" />)}
+          {[...body.limbs, body.torso].map((d, i) => <path key={`f${i}`} d={d} fill={skin} />)}
+          {[hand, mx(hand)].map(([x, y]) => <circle key={x} cx={x} cy={y} r={17} fill={skin} stroke={skinLine} strokeWidth={1.5} />)}
+          <ellipse cx={150} cy={818} rx={34} ry={16} fill={skin} />
+          <ellipse cx={250} cy={818} rx={34} ry={16} fill={skin} />
+          {baseBottom && <g opacity={0.9}>{baseBottom}</g>}
+          {baseTop && <g opacity={0.9}>{baseTop}</g>}
         </g>
 
         {/* head */}
